@@ -1,0 +1,189 @@
+---
+title: "Credit Risk"
+author: "Tiago Leite"
+date: "2023-10-23"
+output: html_document
+---
+
+# Setup
+
+## Libraries
+
+```{r setup, echo=TRUE, message=FALSE, warning=FALSE}
+
+rm(list = ls())
+
+library(rmarkdown)
+library(tinytex)
+library(plyr)
+library(dplyr)
+library(ggplot2)
+library(scales)
+library(plotly)
+library(gridExtra)
+library(corrplot)
+
+```
+
+## Data Input
+
+```{r input, echo=TRUE, message=FALSE, warning=FALSE}
+
+df.data.raw <- read.csv("./RAW Data/german.csv")
+
+```
+
+## Data Tranformation
+
+-   Transform V21 in binary data
+
+```{r transf.V21, echo=FALSE}
+
+df.data <- df.data.raw
+df.data$V21 <- as.character(df.data$V21-1)
+
+```
+
+## Looking to the data
+
+```{r data_1, echo=FALSE, error=TRUE}
+
+# Look up the types of data
+#print(str(df.data))
+
+# Find null numbers
+#print(colSums(is.na(df.data)))
+
+# Calculate the number of unique values
+#print(apply(df.data, 2, function(x) length(unique(x))))
+
+# Display the first few rows of the dataset
+#print(head(df.data))
+
+# Checking the structure of the dataframe
+#str(df.data)
+
+# Checking the dimensions of the dataframe
+#dim(df.data)
+
+# Checking the types of each column
+sapply(df.data, class)
+
+# Checking for missing values in each column
+print(colSums(is.na(df.data)))
+
+
+```
+
+## Status and Sex
+
+```{r status, echo=FALSE, error=TRUE}
+
+# Create a bar plot
+ggplot(df.data, aes(x = V9, fill = V9)) +
+  geom_bar() +
+  labs(title = "Distribution by Sex and Status",
+       x = "Personal status and sex",
+       y = "Count") +
+  theme_minimal()
+
+```
+
+## Age
+
+```{r age, echo=FALSE, error=TRUE}
+
+# Display the updated data frame
+#print(df.data)
+
+# Now, you should be able to create a histogram
+hist(df.data$V13, 
+     main = "Distribution of Age",
+     breaks = 20,
+     xlab = "Age",
+     ylab = "Frequency",
+     col = "lightblue",
+     border = "black")
+
+
+df.data.alto <- subset(df.data, V21==1)
+
+par(mfrow = c(1, 2)) #cria uma tabela com os dois hist
+# 2nd hist
+    hist(df.data.alto$V13, 
+     main = "Distribution of Bad Credit by Age",
+     breaks = 20,
+     xlab = "Age",
+     ylab = "Frequency",
+     col = "lightblue",
+     border = "black")
+
+df.data.baixo <- subset(df.data, V21==0)
+
+# 3 hist
+    hist(df.data.baixo$V13, 
+     main = "Distribution of Good Credit by Age",
+     breaks = 20,
+     xlab = "Age",
+     ylab = "Frequency",
+     col = "lightblue",
+     border = "black")
+
+```
+
+## Credit Ammount
+
+```{r ammount, echo=FALSE, error=TRUE}
+
+# Now, you should be able to create a histogram
+hist(df.data$V5, 
+     main = "Distribution of Credit Ammount",
+     breaks = 20,
+     xlab = "Credit Ammount",
+     ylab = "Frequency",
+     col = "lightblue",
+     border = "black")
+
+df.data.alto <- subset(df.data, V21==1)
+
+par(mfrow = c(1, 2)) #cria uma tabela com os dois hist
+# 2nd hist
+    hist(df.data.alto$V5, 
+     main = "Bad Credit - Credit Ammount",
+     breaks = 20,
+     xlab = "Credit Ammount",
+     ylab = "Frequency",
+     col = "lightblue",
+     border = "black")
+
+df.data.baixo <- subset(df.data, V21==0)
+
+# 3 hist
+    hist(df.data.baixo$V5, 
+     main = "Good Credit - Credit Ammount",
+     breaks = 20,
+     xlab = "Credit Ammount",
+     ylab = "Frequency",
+     col = "lightblue",
+     border = "black")
+
+```
+
+## correlation
+
+```{r correlation, echo=FALSE, error=TRUE}
+
+# correlation matrix
+df.data.numeric <- df.data[, c("V2", "V5","V8", "V11", "V13", "V16", "V18", "V21")]
+df.data.numeric$V21 <- as.numeric(df.data.numeric$V21)
+
+#numeric_columns <- sapply(df.data, is.numeric)
+#numeric_data <- df.data[, numeric_columns]
+correlation_matrix <- cor(df.data.numeric)
+
+# plot parameters
+
+corrplot(correlation_matrix, method = "color", type = "upper", diag = FALSE,
+         tl.col = "black", tl.srt = 45, tl.cex = 0.8)
+
+```

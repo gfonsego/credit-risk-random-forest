@@ -1,0 +1,221 @@
+---
+title: "Credit Risk"
+author: "Gabriel F Goncalves"
+date: "2023-10-23"
+output: html_document
+error: true
+---
+
+# Libraries
+
+```{r setup, echo=TRUE, message=FALSE, warning=FALSE}
+
+rm(list = ls())
+
+library(rmarkdown)
+library(tinytex)
+library(plyr)
+library(dplyr)
+library(ggplot2)
+library(scales)
+library(rpart)
+library(rpart.plot)
+library(pROC)
+library(ROCR)
+library(caret)
+library(randomForest)
+library(partykit)
+library(knitr)
+library(OneR)
+
+```
+
+# Data Input
+
+```{r data input, echo=FALSE, error=FALSE}
+
+#df.data.raw <- read.csv("./RAW Data/german_prediction.csv")
+
+#Creating the function to import the data
+import_data <- function(csv_name, sep){
+  
+  #Define the RAW data frame
+  df.data.raw <- read.csv(csv_name, sep = sep)
+  
+  #Removing the indice column
+  df.data <- df.data.raw %>% select(-X)
+  
+  #Changing the variable V21 [Result] from 1 and 2 to 0 and 1
+  df.data$V21 <- as.character(df.data$V21-1)
+  
+  #FACTORS
+  # Define V21 (Result) as factor
+  df.data$V21 <- factor(df.data$V21, levels = c("1", "0"))
+  df.data$V1 <- factor(df.data$V1, levels = c("A11", "A12", "A13", "A14"))
+  df.data$V3 <- factor(df.data$V3, levels = c("A30", "A31", "A32", "A33", "A34"))
+  df.data$V7 <- factor(df.data$V7, levels = c("A71", "A72", "A73", "A74", "A75"))
+  df.data$V12 <- factor(df.data$V12, levels = c("A121", "A122", "A123", "A124"))
+  
+  return(df.data)
+}
+
+#Running the function to import data
+df.data <- import_data("./RAW Data/german.csv", ",")
+
+```
+
+
+# Data Preparation
+
+```{r data prep, echo=FALSE, error=FALSE}
+
+#Checking if there are ny missing values
+missing_values = any(is.na(df.data))
+
+print(paste("Missing Values:", missing_values))
+
+```
+
+
+# Train Model - Random Forest 
+
+```{r random_forest, echo=FALSE, error=FALSE}
+
+## Dividir os dados em conjuntos de treinamento e teste
+set.seed(100) # Definir uma semente para reprodução
+
+# Defining the train and test samples
+TRAIN_PERCENT = 0.7
+
+train_indices <- sample(1:nrow(df.data), TRAIN_PERCENT * nrow(df.data), replace = FALSE) # 70% of data to TRAIN and 30% to TEST
+train_data <- df.data[train_indices, ]
+test_data <- df.data[-train_indices, ]
+
+# Supondo que 'dados' é o seu conjunto de dados Define os pesos das classes (dando mais peso à classe minoritária)
+pesos_classes <- c(1, 2)  # Pesos das classes (proporcionais ao desequilíbrio)
+
+# Treinar o modelo Random Forest
+model <- randomForest(V21 ~ ., 
+                      data = train_data, 
+                      ntree = 1000, 
+                      classwt = pesos_classes, 
+                      sampsize = c(100,100), 
+                      cutoff = c(0.3, 0.7))
+
+png("error2_importance_plot.png", width = 400, height = 350)  # Adjust width and height in pixels
+
+#Plot the errors
+plot(model, main = "Overall Error - Model 2")
+
+# Save the plot
+dev.off()
+
+# Visualizar informações do modelo
+print(model)
+
+# Tabela de contagem no data set de train
+train_count <- count(train_data, V21)
+print(train_count)
+
+#Tabela de contagem do evento no data set de test
+test_count <- count(test_data, V21)
+print(test_count)
+
+#Calculate and plot the importances for the model
+importance(model)
+varImpPlot(model, main = "Attributes Importance Ranking")
+
+```
+
+# Evaluate Model - Random Forest 
+
+```{r evaluate, echo=FALSE, error=TRUE}
+
+# Make predictions on the test set
+predictions <- predict(model, newdata = test_data, type = "response")
+
+# Compute accuracy
+accuracy <- confusionMatrix(predictions, test_data$V21)$overall['Accuracy']
+
+# Get confusion matrix
+conf_matrix <- confusionMatrix(predictions, test_data$V21)
+print(conf_matrix)
+
+# Calculando Precision, Recall e F1-Score
+precision <- conf_matrix$byClass["Pos Pred Value"]
+recall <- conf_matrix$byClass["Sensitivity"]
+f1_score <- conf_matrix$byClass["F1"]
+
+# Exibindo os resultados
+print(paste("Precisão:", precision))
+print(paste("Recall:", recall))
+print(paste("F1-Score:", f1_score))
+
+pred1 = predict(model, newdata = test_data, type = "prob")
+
+perf = prediction(pred1[,2], test_data$V21)
+
+# 1. Area under curve
+auc = performance(perf, "auc")
+
+# 2. True Positive and Negative Rate
+pred3 = performance(perf, "tpr","fpr")
+
+# 3. Plot the ROC curve
+plot(pred3, main="ROC Curve for Random Forest", col=2, lwd=2)
+abline(a=0,b=1,lwd=2,lty=2,col="gray")
+
+```
+
+# Prediction
+
+```{r prediction, echo=FALSE, error=TRUE}
+
+df.prediction <- import_data("./RAW Data/german_pred.csv", ";")
+
+new_prediction <- predict(model, newdata = df.prediction)
+
+#print(paste("Credit Risk:", new_prediction))
+
+df.pred <- data.frame(prediction = new_prediction)
+df.pred$New_Person_ID <- seq(from = 1, to = length(df.pred$prediction))
+df.pred <- df.pred[, c("New_Person_ID", "prediction")]
+
+print(df.pred)
+
+```
+
+
+# One R Model Baseline
+
+```{r oner, echo=FALSE, error=TRUE}
+
+# Train the OneR model on the iris dataset
+model2 <- OneR(V21 ~ ., data = test_data)
+
+# Make predictions on the test set
+predictions2 <- predict(model2, newdata = test_data)
+
+# Obtendo os valores verdadeiros (ground truth) do conjunto de teste
+ground_truth <- test_data$true_labels
+
+# Compute accuracy
+accuracy2 <- confusionMatrix(predictions2, test_data$V21)$overall['Accuracy']
+
+# Get confusion matrix
+conf_matrix <- confusionMatrix(predictions2, test_data$V21)
+print(conf_matrix)
+
+# Calculando Precision, Recall e F1-Score
+precision <- conf_matrix$byClass["Pos Pred Value"]
+recall <- conf_matrix$byClass["Sensitivity"]
+f1_score <- conf_matrix$byClass["F1"]
+
+# Exibindo os resultados
+print(paste("Precisão:", precision))
+print(paste("Recall:", recall))
+print(paste("F1-Score:", f1_score))
+
+```
+
+
